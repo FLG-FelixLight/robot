@@ -1,0 +1,150 @@
+==========================================================
+SLIDE 10 — MÃ ĐƯỜNG ĐI & ĐIỂM ĐẾN
+==========================================================
+
+TIÊU ĐỀ SLIDE
+MÃ ĐƯỜNG ĐI & ĐIỂM ĐẾN
+
+PHỤ ĐỀ
+Mỗi điểm đến chỉ là một chuỗi ký tự — đổi đích không cần nạp lại firmware
+
+
+----------------------------------------------------------
+BẢN 1 — DÙNG TRỰC TIẾP TRÊN SLIDE (8 gạch đầu dòng)
+----------------------------------------------------------
+
+- Route code là chuỗi quyết định ở các junction trên track đã biết
+- L = rẽ trái; R = rẽ phải; S = đi thẳng qua junction
+- 0 = dừng ở junction được phát hiện tiếp theo, phát welcome.mp3
+- Ví dụ `L0`: rẽ trái tại junction 1; dừng tại junction 2
+- Robot đọc lần lượt từng ký tự khi gặp ngã ba
+- Bảng điểm đến lưu trong LittleFS (/tables.json)
+- Web cho phép thêm/sửa/xóa rồi lưu bảng lên ESP32
+- Detector junction hiện chưa được xác nhận trên robot; chưa tuyên bố kết quả đạt
+
+
+----------------------------------------------------------
+BẢN 2 — BỔ SUNG CỦA NHÓM (2 ký tự mở rộng)
+----------------------------------------------------------
+
+- S = tiêu thụ lệnh ở junction và tiếp tục bám line thẳng
+- 0 = dừng tại junction được phát hiện; phát audio ngay và giữ STOP ≥ 5 s
+- 0 bắt buộc là ký tự cuối, mã tối đa 90 ký tự
+- Chỉ chấp nhận L, R, S, 0 → kiểm tra ngay trên web và trên firmware
+
+
+----------------------------------------------------------
+BẢNG KÝ TỰ (đặt bên phải slide)
+----------------------------------------------------------
+
+Ký tự | Ý nghĩa
+------+--------------------------------------------
+  L   | Rẽ trái ở ngã ba kế tiếp
+  R   | Rẽ phải ở ngã ba kế tiếp
+  S   | Đi thẳng qua ngã ba kế tiếp
+  0   | Dừng tại junction này; phát welcome.mp3; giữ STOP ít nhất 5 s
+
+
+----------------------------------------------------------
+VÍ DỤ MINH HOẠ — LRLSLR0
+----------------------------------------------------------
+
+Ngã 1: L → rẽ trái
+Ngã 2: R → rẽ phải
+Ngã 3: L → rẽ trái
+Ngã 4: S → đi thẳng
+Ngã 5: L → rẽ trái
+Ngã 6: R → rẽ phải
+Ngã 7: 0 → dừng, phát welcome.mp3, giữ STOP ≥ 5 s
+
+→ Sáu junction đầu tiêu thụ lệnh L/R/S; junction thứ 7 là điểm dừng.
+  Đây là diễn giải theo logic code, không phải kết quả runtime đã đo.
+
+
+----------------------------------------------------------
+BẢNG ĐIỂM ĐẾN MẪU (data/tables.json)
+----------------------------------------------------------
+
+ID | Mã        | Diễn giải
+---+-----------+-----------------------------------------
+ 1 | S0        | Đi thẳng 1 ngã rồi dừng
+ 2 | L0        | Rẽ trái ở ngã đầu; dừng và phát âm thanh ở ngã tiếp theo
+ 3 | LRLSLR0   | Trái → Phải → Trái → Thẳng → Trái → Phải → Dừng
+ 4 | RSR0      | Phải → Thẳng → Phải → Dừng
+
+
+----------------------------------------------------------
+HÌNH MINH HOẠ NÊN CÓ (bên phải slide)
+----------------------------------------------------------
+
+Sơ đồ track, tô sáng đường đi:
+
+START ──(line)── J1 ──L──> segment ──(line)── J2 [0 / STOP]
+
+- Vẽ đúng topology của sa bàn thực tế; không mặc định track là cây.
+- Animation minh họa `L` được tiêu thụ ở J1; `0` được tiêu thụ ở J2.
+- Có thể đánh dấu audio và khoảng dừng ≥ 5 s tại điểm kết thúc.
+
+
+----------------------------------------------------------
+GHI CHÚ THUYẾT TRÌNH (speaker notes)
+----------------------------------------------------------
+
+- Route code quy định hành động tại từng junction được nhận diện; cần
+  topology track cố định và vị trí bắt đầu quy ước để giải thích tuyến.
+- `L0`: L được tiêu thụ ở junction đầu, robot quay trái rồi bám line;
+  0 được tiêu thụ ở junction tiếp theo, dừng và yêu cầu phát welcome.mp3.
+- STOP giữ ít nhất 5 giây; sau đó vẫn chờ lệnh mới. Không tự quay về.
+- Thay đổi bảng trên trình duyệt là local cho đến khi bấm "Lưu lên robot".
+  PUT thành công thì LittleFS và map RAM được cập nhật.
+- Điều kiện detector trong code là pattern `1...0...1`, debounce 30 ms,
+  cần arm bằng trạng thái giữa 200 ms. Người dùng báo detector hiện chưa
+  hoạt động trên robot; chưa có log để xác định nguyên nhân.
+- Mã hợp lệ: L/R/S tùy ý (có thể rỗng) rồi đúng 0 cuối; tối đa 90 ký tự.
+
+
+----------------------------------------------------------
+CÂU CHUYỂN SANG SLIDE TIẾP THEO (Web UI)
+----------------------------------------------------------
+
+"Vậy người dùng đổi điểm đến bằng cách nào? Toàn bộ bảng này được quản lý
+trên giao diện web, không cần chạm vào code."
+
+
+----------------------------------------------------------
+BẢN TIẾNG ANH (nếu cần)
+----------------------------------------------------------
+
+Title: PATH CODE & DESTINATIONS
+Subtitle: A destination is just a string — change it without reflashing
+
+- A route code is a sequence of decisions on a predefined track
+- L = left, R = right, S = continue straight
+- 0 = stop at the detected junction, play welcome.mp3, hold STOP ≥ 5 s
+- The robot consumes one character per intersection
+- Destinations are stored in LittleFS (/tables.json)
+- Destinations can be edited on the web UI, no recompilation
+
+Extension:
+- S = go straight through an intersection
+- 0 = stop at the next intersection (must be the last character)
+
+
+----------------------------------------------------------
+LƯU Ý / CÂU HỎI DỰ KIẾN
+----------------------------------------------------------
+
+Q: Vì sao dùng chuỗi thay vì tọa độ?
+A: Với track cố định, chuỗi lệnh tại junction là cách gọn để lưu tuyến.
+   Firmware hiện không chứa tọa độ hoặc khoảng cách vật lý.
+
+Q: Detector junction đã hoạt động chưa?
+A: Code có detector, nhưng thử nghiệm gần nhất báo chưa phát hiện. Cần
+   log 5 bit sensor, LINE_ON, mode và thời gian arm/debounce để chẩn đoán.
+
+Q: Tối đa bao nhiêu điểm đến?
+A: Không giới hạn cứng về số điểm; mỗi mã tối đa 90 ký tự, bảng lưu
+   dạng JSON trong LittleFS.
+
+Q: Robot có thể quay về chính xác vị trí xuất phát không?
+A: Chưa. Route string không lưu khoảng cách/điểm xuất phát giữa junction.

@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ESP32-S3 Line Follower</title>
+    <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+    <header class="topbar">
+        <div class="brand">
+            <span class="logo">🤖</span>
+            <div>
+                <h1>ESP32-S3 LINE FOLLOWER</h1>
+                <p>Line sensor 5 mắt &middot; L298N &middot; PID &middot; Path &middot; Audio</p>
+            </div>
+        </div>
+
+        <div class="status">
+            <span id="wsDot" class="dot offline"></span>
+            <span id="wsText">Mat ket noi</span>
+            <span class="sep">|</span>
+            <span id="ipText">IP: --</span>
+            <span class="sep">|</span>
+            <span id="rssiText">WiFi: --</span>
+        </div>
+    </header>
+
+    <nav class="tabs">
+        <button class="tab active" data-tab="tab-control">Dieu khien</button>
+        <button class="tab" data-tab="tab-dest">Diem den</button>
+    </nav>
+
+    <main>
+        <!-- ================= TAB CONTROL ================= -->
+        <div id="tab-control" class="tabpane active">
+
+            <!-- SENSOR -->
+            <section class="card">
+                <h2>Cam bien line</h2>
+                <div class="sensors">
+                    <div class="sensor" id="s0"><span class="name">S1</span><span class="lamp"></span></div>
+                    <div class="sensor" id="s1"><span class="name">S2</span><span class="lamp"></span></div>
+                    <div class="sensor" id="s2"><span class="name">S3</span><span class="lamp"></span></div>
+                    <div class="sensor" id="s3"><span class="name">S4</span><span class="lamp"></span></div>
+                    <div class="sensor" id="s4"><span class="name">S5</span><span class="lamp"></span></div>
+                </div>
+                <p id="fullWarn" class="warn hidden">⚠ 5 cam bien deu thay line (nga tu / vung den rong)</p>
+            </section>
+
+            <!-- TELEMETRY -->
+            <section class="grid">
+                <div class="card metric">
+                    <h3>Error</h3>
+                    <p id="mErr">0.00</p>
+                </div>
+                <div class="card metric">
+                    <h3>PID</h3>
+                    <p id="mPid">0.00</p>
+                </div>
+                <div class="card metric">
+                    <h3>Left</h3>
+                    <p id="mL">0</p>
+                </div>
+                <div class="card metric">
+                    <h3>Right</h3>
+                    <p id="mR">0</p>
+                </div>
+            </section>
+
+            <!-- CONTROL -->
+            <section class="card">
+                <h2>Dieu khien</h2>
+                <div class="controls">
+                    <button id="btnStart" class="btn start">▶ START</button>
+                    <button id="btnStop" class="btn stop">■ STOP</button>
+                    <button id="btnEstop" class="btn estop">E-STOP</button>
+                </div>
+                <p id="stateText" class="state">Trang thai: DUNG</p>
+                <p id="noticeText" class="state notice">--</p>
+            </section>
+
+            <!-- AUDIO -->
+            <section class="card">
+                <h2>Am thanh</h2>
+                <div class="controls">
+                    <button id="btnPlay" class="btn start">🔊 Phat welcome.mp3</button>
+                </div>
+                <p class="hint">File phai nam trong <b>/data/audio/welcome.mp3</b> va da nap LittleFS.</p>
+            </section>
+
+            <!-- MANUAL DRIVE -->
+            <section class="card">
+                <h2>Lai tay</h2>
+                <p class="mode">Che do: <b id="modeText">STOP</b></p>
+                <div class="dpad">
+                    <span></span>
+                    <button class="pad" data-dir="forward">▲</button>
+                    <span></span>
+                    <button class="pad" data-dir="left">◀</button>
+                    <span></span>
+                    <button class="pad" data-dir="right">▶</button>
+                    <span></span>
+                    <button class="pad" data-dir="back">▼</button>
+                    <span></span>
+                </div>
+                <p class="hint">Giu nut de chay, tha ra de dung. Giu 2 nut (len + trai...) de cua. Hoac dung phim mui ten.</p>
+            </section>
+
+            <!-- PID TUNING -->
+            <section class="card">
+                <h2>Tuning PID</h2>
+
+                <div class="slider">
+                    <label>Kp <b id="vKp">35.0</b></label>
+                    <input type="range" id="kp" min="0" max="100" step="0.5" value="35">
+                </div>
+
+                <div class="slider">
+                    <label>Ki <b id="vKi">0.0</b></label>
+                    <input type="range" id="ki" min="0" max="10" step="0.1" value="0">
+                </div>
+
+                <div class="slider">
+                    <label>Kd <b id="vKd">20.0</b></label>
+                    <input type="range" id="kd" min="0" max="100" step="0.5" value="20">
+                </div>
+
+                <div class="slider">
+                    <label>Base speed <b id="vBase">150</b></label>
+                    <input type="range" id="base" min="0" max="255" step="5" value="150">
+                </div>
+            </section>
+
+            <!-- CHART -->
+            <section class="card">
+                <h2>Error theo thoi gian</h2>
+                <canvas id="chart" width="800" height="220"></canvas>
+            </section>
+        </div>
+
+        <!-- ================= TAB DESTINATION ================= -->
+        <div id="tab-dest" class="tabpane">
+            <section class="card">
+                <h2>Bang diem den</h2>
+
+                <form id="destForm" class="destform">
+                    <input id="destId" type="number" min="1" max="2147483647" step="1" placeholder="ID (a[1], a[2]...)" required>
+                    <input id="destCode" type="text" placeholder="Ma, VD: LRLS0" required>
+                    <button class="btn small start" type="submit">Luu</button>
+                </form>
+
+                <p class="hint">
+                    L = re trai &middot; R = re phai &middot; S = di thang &middot; 0 = diem den (bat buoc o cuoi).
+                    Robot tieu thu 1 ky tu moi khi gap nga re, gap <b>0</b> thi di toi nga/vach ke tiep roi dung.
+                </p>
+
+                <table class="desttable">
+                    <thead>
+                        <tr><th>ID</th><th>Ma</th><th>Diem den</th><th></th></tr>
+                    </thead>
+                    <tbody id="destBody">
+                        <tr><td colspan="4" class="empty">Chua co du lieu</td></tr>
+                    </tbody>
+                </table>
+
+                <div class="controls">
+                    <button id="btnReload" class="btn small ghost" type="button">Tai lai</button>
+                    <button id="btnSave" class="btn small start" type="button">Luu len robot</button>
+                </div>
+
+                <p id="destLog" class="state">--</p>
+            </section>
+        </div>
+    </main>
+
+    <footer>
+        <span id="logText">Cho ket noi websocket...</span>
+    </footer>
+
+    <script src="/app.js"></script>
+</body>
+</html>

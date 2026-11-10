@@ -1,0 +1,103 @@
+==========================================================
+SLIDE 3 — Ý TƯỞNG & BÀI TOÁN
+(Nguồn: Autonomous Delivery Robot — Introduction / Problem Statement / Proposed Solution)
+==========================================================
+
+TIÊU ĐỀ SLIDE
+Ý TƯỞNG & BÀI TOÁN
+
+PHỤ ĐỀ
+Từ việc giao đồ thủ công đến robot tự hành giao hàng A → B
+
+
+----------------------------------------------------------
+BẢN 1 — DÙNG TRỰC TIẾP TRÊN SLIDE (8 gạch đầu dòng)
+----------------------------------------------------------
+
+- Nhà hàng, khách sạn: nhân viên giao đồ thủ công, lặp lại nhiều lần
+- Khách phải xuống sảnh nhận, hoặc nhân viên mang lên tận phòng
+- Hệ quả: tăng thời gian phục vụ, lãng phí nhân lực
+- Đề xuất: robot cỡ nhỏ bám line, người dùng chọn điểm đến từ web
+- Nền tảng: ESP32 + 5 mắt dò line + L298N + 2 động cơ DC
+- Mã đường đi dùng L/R/S và ký tự kết thúc 0; lưu trong LittleFS
+- Firmware còn có web realtime, âm thanh, đồng hồ và tạm dừng khi có vật cản gần
+- Phạm vi: sa bàn vạch kẻ sẵn; chưa camera, LiDAR, mapping hoặc tự quay về gốc
+
+
+----------------------------------------------------------
+BẢN 2 — LAYOUT 2 CỘT (VẤN ĐỀ | GIẢI PHÁP)
+----------------------------------------------------------
+
+CỘT TRÁI — VẤN ĐỀ
+- Giao đồ trong nhà hàng/khách sạn vẫn làm thủ công
+- Nhân viên đi lại nhiều, công việc lặp lại
+- Khách mất thời gian chờ đợi
+- Chưa có hệ thống tự động nhận yêu cầu và giao tận nơi
+
+CỘT PHẢI — GIẢI PHÁP
+- Robot thử nghiệm cỡ nhỏ, đi theo vạch dẫn đường định sẵn
+- Web cho phép chọn điểm đến; mã tuyến được lưu trên ESP32
+- L/R = rẽ, S = đi thẳng, 0 = dừng ở junction tiếp theo
+- Firmware có giám sát vật cản phía trước và phát thông báo âm thanh
+- Phát hiện junction hiện chưa đạt trong lần thử gần nhất; đang cần log để chẩn đoán
+
+
+----------------------------------------------------------
+GHI CHÚ THUYẾT TRÌNH (speaker notes)
+----------------------------------------------------------
+
+- Trong nhà hàng và khách sạn, việc giao đồ ăn hay vật dụng cho khách
+  vẫn do nhân viên làm thủ công. Khách đặt qua hệ thống online nhưng
+  vẫn phải xuống sảnh nhận, hoặc nhân viên phải mang lên phòng.
+- Việc này lặp đi lặp lại, tốn thời gian phục vụ và nhân lực.
+- Nhóm đề xuất một robot tự hành nhận yêu cầu và giao hàng từ điểm A
+  đến điểm B, dùng ESP32 làm bộ điều khiển trung tâm.
+- Robot đi theo vạch kẻ sẵn, dùng 5 mắt dò line để bám vạch và nhận
+  biết ngã ba.
+- Mã tuyến là chuỗi quyết định ở từng junction trên sa bàn. Chỉ mô hình
+  thành cây nếu topology của track thực sự là cây.
+- Ví dụ `L0`: rẽ trái tại junction thứ nhất, bám line tiếp, rồi dừng ở
+  junction kế tiếp và phát `welcome.mp3`.
+- Bảng tuyến có thể được sửa trên web và lưu trong LittleFS.
+- Firmware có siêu âm để tạm dừng motor khi vật cản gần; chưa tự tránh
+  vật cản. Chức năng và detector junction cần được xác nhận trên robot.
+- Chưa có camera, LiDAR, mapping hoặc tự quay về đúng vị trí xuất phát.
+
+
+----------------------------------------------------------
+CÂU CHUYỂN SANG SLIDE TIẾP THEO (Block diagram)
+----------------------------------------------------------
+
+"Vậy để làm được điều đó, robot cần những khối nào và chúng nói chuyện
+với nhau ra sao? Đây là sơ đồ khối tổng thể."
+
+
+----------------------------------------------------------
+BẢN TIẾNG ANH (nếu slide cần tiếng Anh)
+----------------------------------------------------------
+
+Title: IDEA & PROBLEM STATEMENT
+Subtitle: A line-following robot prototype with web-selected routes
+
+- In restaurants and hotels, item delivery is still done manually
+- Guests must come down to the lobby, or staff must bring items to rooms
+- Result: longer service time, repetitive work, wasted manpower
+- Proposal: a small line-following robot with destinations selected on a web UI
+- Platform: ESP32 + 5 line sensors + L298N + 2 DC motors
+- Route code uses L/R/S and terminal 0, stored in LittleFS
+- Scope: predefined line track, no camera, no LiDAR
+
+
+----------------------------------------------------------
+LƯU Ý KHI TRÌNH BÀY
+----------------------------------------------------------
+
+- Firmware route code hiện tại dùng:
+    S = đi thẳng qua ngã ba
+    0 = dừng tại junction được phát hiện tiếp theo, phát welcome.mp3
+- Không khẳng định phát hiện junction đã đạt: robot hiện được báo chưa
+  nhận ngã rẽ trong thử nghiệm; cần serial/telemetry logs để điều tra.
+- Siêu âm hiện chỉ tạm dừng, không phải thuật toán tự tránh vật cản.
+- Không đưa quá 8 gạch đầu dòng lên slide; phần giải thích để speaker notes.
+- Nên có sơ đồ track minh họa nhiều junction và tuyến L0; không vẽ cây
+  nếu track thật có vòng lặp hoặc nhánh S không tương ứng cây.

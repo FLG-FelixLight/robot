@@ -1,0 +1,154 @@
+==========================================================
+SLIDE 13 — HẠN CHẾ & HƯỚNG PHÁT TRIỂN
+==========================================================
+
+TIÊU ĐỀ SLIDE
+HẠN CHẾ & HƯỚNG PHÁT TRIỂN
+
+PHỤ ĐỀ
+Phân biệt tính năng trong code với kết quả đã kiểm chứng
+
+
+----------------------------------------------------------
+BẢN CHÍNH — BẢNG 4 CỘT DÙNG TRÊN SLIDE (6 dòng)
+----------------------------------------------------------
+
+STT | Hạn chế hiện tại                              | Ảnh hưởng                        | Hướng phát triển                              | Ưu tiên
+----+-----------------------------------------------+----------------------------------+-----------------------------------------------+--------
+ 1  | Robot hiện được báo chưa phát hiện junction    | PATH không tiêu thụ được route    | Log S1–S5, mode, armed, timer; chẩn đoán polarity | Cao
+ 2  | Không encoder; PID chỉ dùng vị trí line          | Hai bánh lệch tốc độ có thể drift | Encoder + PID tốc độ; đo sai số                  | Cao
+ 3  | Mất line chưa có timeout fail-safe               | Có thể chạy theo error cũ         | Phát hiện mất line → dừng an toàn                | Cao
+ 4  | Obstacle pause có trong code, chưa test trên xe  | Không tự tránh; giới hạn phía trước | Xác minh ngưỡng/đấu nối rồi thiết kế tránh       | Cao
+ 5  | Không timeout tổng PATH, không auto-return        | Có thể chạy lâu; chưa biết vị trí gốc | Timeout, topology và định vị trước return         | Trung bình
+ 6  | Không auth web/IR/AP fallback; PID không lưu      | Rủi ro vận hành và cấu hình       | Auth, phương án offline, NVS                    | Trung bình
+
+Ghi chú: nếu slide chật, bỏ cột "Ưu tiên" và giữ 3 cột Hạn chế | Ảnh hưởng | Hướng phát triển.
+
+
+----------------------------------------------------------
+BẢN GỌN — 2 CỘT (nếu chỉ còn 30 giây)
+----------------------------------------------------------
+
+HẠN CHẾ                              | HƯỚNG PHÁT TRIỂN
+--------------------------------------+--------------------------------------------
+Junction chưa nhận trên robot         | Log sensor/state rồi chẩn đoán
+Không encoder                         | Thêm encoder, đo tốc độ hai bánh
+Mất line chưa fail-safe               | Mất line → dừng an toàn
+Obstacle pause chưa kiểm thử          | Xác minh ngưỡng và đấu nối
+Không timeout/return                  | Timeout; thiết kế track/origin
+Không auth/AP/IR, PID không lưu       | Auth, fallback, IR, NVS
+
+
+----------------------------------------------------------
+BẢN ĐẦY ĐỦ — DÙNG CHO HANDOUT / PHỤ LỤC (8 dòng)
+----------------------------------------------------------
+
+1. Không có encoder
+   - Ảnh hưởng: không biết tốc độ thực; hai động cơ lệch nhau thì PID
+     bám vạch vẫn bù được nhưng xe bị lệch dần.
+   - Khắc phục: gắn encoder quang từ, thêm vòng PID tốc độ bên trong.
+
+2. Chưa xử lý mất vạch
+   - Ảnh hưởng: readLine() giữ error cuối nên xe quay vòng tại chỗ.
+   - Khắc phục: đếm thời gian active = 0; quá 300 ms thì dừng an toàn
+     hoặc quay lại theo hướng ngược.
+
+3. Junction detector chưa được xác nhận trên robot
+   - Trạng thái: người dùng báo robot hiện không phát hiện ngã rẽ.
+   - Điều tra: log S1–S5, mode, LINE_ON, điều kiện arm 200 ms và debounce 30 ms.
+   - Sau khi có dữ liệu: kiểm tra polarity/hình học trước khi đổi thuật toán.
+
+4. Chưa có remote hồng ngoại
+   - Ảnh hưởng: thiếu phương án điều khiển dự phòng khi mất WiFi.
+   - Khắc phục: tích hợp VS1838B + giải mã NEC như đề tài gốc.
+
+5. Không có AP fallback
+   - Ảnh hưởng: sai SSID/mật khẩu là không vào được web.
+   - Khắc phục: nếu STA thất bại sau 15 s → tự phát WiFi AP + captive portal.
+
+6. PID không được lưu
+   - Ảnh hưởng: khởi động lại trở về Kp=35, Ki=0, Kd=20.
+   - Khắc phục: ghi tham số vào NVS (Preferences) mỗi khi chỉnh trên web.
+
+7. Web chưa có xác thực
+   - Ảnh hưởng: ai trong cùng mạng cũng điều khiển được robot.
+   - Khắc phục: thêm mật khẩu/đăng nhập đơn giản.
+
+8. Chưa tự tránh vật cản hoặc quay về điểm xuất phát
+   - Firmware có HY-SRF05 để tạm dừng khi vật cản gần, nhưng chưa được
+     xác nhận trên phần cứng và không tự tính đường tránh.
+   - Route không lưu khoảng cách/vị trí xuất phát giữa junction, nên
+     không thể khẳng định robot sẽ quay về đúng A.
+   - Khắc phục: kiểm thử cảm biến; mô hình hóa track và định danh origin
+     trước khi thiết kế return.
+
+Ngoài phạm vi phiên bản 1 (đã nêu trong tài liệu đề tài):
+- Tự lập bản đồ môi trường, camera nhận vật cản, điều hướng không cần vạch,
+  tự gọi thang máy, nhận diện khuôn mặt, tự nhặt/đặt hàng.
+
+
+----------------------------------------------------------
+LỘ TRÌNH ĐỀ XUẤT (có thể đưa thành 3 mốc nhỏ dưới bảng)
+----------------------------------------------------------
+
+Ngắn hạn  : chẩn đoán junction bằng log; kiểm thử bám line/obstacle; fail-safe mất line
+Trung hạn : timeout PATH, encoder + PID tốc độ, auth/NVS, IR hoặc AP fallback
+Dài hạn   : định vị/topology để quay về origin; tránh vật cản; quản lý nhiều robot
+
+
+----------------------------------------------------------
+GHI CHÚ THUYẾT TRÌNH (speaker notes)
+----------------------------------------------------------
+
+- Vấn đề ưu tiên hiện tại là junction detector: code có nhưng robot được
+  báo chưa phát hiện. Không khẳng định đã chạy đạt; cần log 5 bit sensor.
+- PID dùng vị trí line, không có encoder để đo tốc độ thực hai bánh.
+- Mất line chưa có fail-safe timeout; obstacle pause đã có trong code
+  nhưng cần xác nhận sensor/đấu nối/ngưỡng trên robot.
+- Chưa có timeout tổng PATH hoặc return-to-origin.
+- Ưu tiên: chẩn đoán và đo lại trước; sau đó mới mở rộng encoder,
+  fail-safe, bảo mật, IR/AP và chức năng quay về.
+- Những phần như camera, tự lập bản đồ, tự gọi thang máy nằm ngoài phạm vi
+  đồ án và đã được ghi rõ từ đầu.
+
+
+----------------------------------------------------------
+CÂU CHUYỂN SANG SLIDE DEMO
+----------------------------------------------------------
+
+"Và đây là những gì robot làm được ở phiên bản hiện tại — mời thầy/cô
+xem demo."
+
+
+----------------------------------------------------------
+BẢN TIẾNG ANH (nếu cần)
+----------------------------------------------------------
+
+Title: LIMITATIONS & FUTURE WORK
+Subtitle: Separate implemented code from verified behavior
+
+Limitation                                  | Evidence/status                         | Next step
+---------------------------------------------+------------------------------------------+------------------------------------------
+Junction detector not confirmed             | User reports no detection on robot       | Log sensors/state, check polarity/pattern
+No encoders                                 | No wheel speed feedback in code           | Encoders + measure wheel speed
+No lost-line timeout                        | readLine retains lastError                | Safe stop after a tested threshold
+Ultrasonic pause not hardware-verified      | Code pauses; no obstacle avoidance         | Test distance and ECHO voltage
+No PATH timeout or origin return            | Route lacks distances/origin coordinates  | Track model and localization
+No web auth/AP/IR; PID not persisted        | Current implementation limits             | Auth, fallback, IR, NVS
+
+Roadmap:
+- Short term : lost-line handling, global timeout, persist PID
+- Mid term   : encoders + speed loop, adjustable thresholds, AP fallback, IR
+- Long term  : obstacle avoidance, auto-return to A, multi-robot server
+
+
+----------------------------------------------------------
+LƯU Ý
+----------------------------------------------------------
+
+- Nêu rõ detector junction chưa hoạt động theo thử nghiệm gần nhất; không
+  đổi "đã có code" thành "đã đạt kết quả".
+- Đừng nói "chưa làm được" mà nói "phiên bản 1 tập trung vào X, phần Y nằm
+  trong lộ trình" — thể hiện sự chủ động.
+- Nếu bị hỏi "tại sao không làm encoder ngay từ đầu?": trả lời vì giới hạn
+  thời gian và mục tiêu học PID vị trí trước; encoder là bước tiếp theo.
