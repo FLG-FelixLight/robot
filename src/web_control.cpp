@@ -73,6 +73,22 @@ void sendTelemetry()
     ws.textAll(msg);
 }
 
+void sendEventLog(const char *message)
+{
+    if (ws.count() == 0)
+    {
+        return;
+    }
+
+    JsonDocument doc;
+    doc["type"] = "event";
+    doc["message"] = message;
+
+    String event;
+    serializeJson(doc, event);
+    ws.textAll(event);
+}
+
 // ======================================================
 // 20. PATH / JUNCTION
 // ======================================================
@@ -82,6 +98,7 @@ void applyCommand(const Command &c)
     switch (c.type)
     {
         case CMD_START:
+            cancelPathAction();
             resetPidState();
             robotEnabled = true;
             robotMode = MODE_AUTO;
@@ -99,6 +116,7 @@ void applyCommand(const Command &c)
             break;
 
         case CMD_GOTO:
+            cancelPathAction();
             resetPidState();
             robotEnabled = true;
             robotMode = MODE_PATH;
@@ -123,6 +141,7 @@ void applyCommand(const Command &c)
 
         case CMD_STOP:
         case CMD_ESTOP:
+            cancelPathAction();
             robotEnabled = false;
             robotMode = MODE_STOP;
             strlcpy(driveDir, "stop", sizeof(driveDir));
@@ -137,6 +156,7 @@ void applyCommand(const Command &c)
             break;
 
         case CMD_DRIVE:
+            cancelPathAction();
             strlcpy(driveDir, c.text, sizeof(driveDir));
 
             if (strcmp(driveDir, "stop") == 0)
@@ -184,12 +204,31 @@ void applyCommand(const Command &c)
 // 22. HANDLE COMMAND FROM WEB
 // ======================================================
 
-void handleCommand(const String &msg)
+void sendGotoResult(AsyncWebSocketClient *client, bool ok, const char *message)
+{
+    if (client == nullptr)
+    {
+        return;
+    }
+
+    JsonDocument doc;
+    doc["type"] = "command_result";
+    doc["cmd"] = "goto";
+    doc["ok"] = ok;
+    doc["message"] = message;
+
+    String response;
+    serializeJson(doc, response);
+    client->text(response);
+}
+
+void handleCommand(const String &msg, AsyncWebSocketClient *client)
 {
     JsonDocument doc;
 
     if (deserializeJson(doc, msg))
     {
+        Serial.println("[WS] Invalid command JSON");
         return;
     }
 
@@ -216,22 +255,50 @@ void handleCommand(const String &msg)
     }
     else if (strcmp(cmd, "goto") == 0)
     {
-        int id = doc["id"] | 0;
-
-        std::map<int, String>::iterator it = gTables.find(id);
-
-        if (it == gTables.end())
+        if (!doc["id"].is<int>())
         {
-            char b[80];
-            snprintf(b, sizeof(b), "Khong co ma diem den %d", id);
-            setNotice(b);
+            setNotice("Invalid destination ID");
+            sendGotoResult(client, false, "Invalid destination ID");
+            return;
+        }
+
+        const int id = doc["id"].as<int>();
+        if (id <= 0)
+        {
+            setNotice("Invalid destination ID");
+            sendGotoResult(client, false, "Invalid destination ID");
+            return;
+        }
+
+        String routeCode;
+        if (doc["code"].is<const char *>())
+        {
+            routeCode = doc["code"].as<String>();
+        }
+        else
+        {
+            std::map<int, String>::const_iterator it = gTables.find(id);
+            if (it != gTables.end())
+            {
+                routeCode = it->second;
+            }
+        }
+
+        String validationError;
+        if (routeCode.length() == 0 || !pathValid(routeCode, validationError))
+        {
+            const char *reason = routeCode.length() == 0
+                ? "Destination not found; save or send a valid route"
+                : validationError.c_str();
+            setNotice(reason);
+            sendGotoResult(client, false, reason);
             sendConfig(nullptr);
             return;
         }
 
         c.type = CMD_GOTO;
         c.value = id;
-        strlcpy(c.text, it->second.c_str(), sizeof(c.text));
+        strlcpy(c.text, routeCode.c_str(), sizeof(c.text));
     }
     else if (strcmp(cmd, "play") == 0)
     {
@@ -256,7 +323,28 @@ void handleCommand(const String &msg)
 
     if (c.type != CMD_NONE && gCmdQueue != nullptr)
     {
-        xQueueSend(gCmdQueue, &c, 0);
+        if (xQueueSend(gCmdQueue, &c, 0) != pdTRUE)
+        {
+            if (c.type == CMD_GOTO)
+            {
+                setNotice("Command queue full; route was not started");
+                sendGotoResult(client, false, "Robot command queue is full");
+            }
+            return;
+        }
+
+        if (c.type == CMD_GOTO)
+        {
+            char message[96];
+            snprintf(message, sizeof(message), "Route %d (%s) queued", c.value, c.text);
+            setNotice(message);
+            sendGotoResult(client, true, message);
+        }
+    }
+    else if (c.type == CMD_GOTO)
+    {
+        setNotice("Robot command queue unavailable");
+        sendGotoResult(client, false, "Robot command queue unavailable");
     }
 }
 
@@ -290,7 +378,7 @@ void onWsEvent(
             info->opcode == WS_TEXT)
         {
             data[len] = 0;
-            handleCommand(String((char *)data));
+            handleCommand(String((char *)data), client);
         }
     }
 }

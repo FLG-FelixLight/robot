@@ -19,6 +19,16 @@ namespace
 bool obstaclePaused = false;
 uint32_t obstaclePauseStartedAt = 0;
 bool wifiWasConnected = false;
+bool junctionPatternActive = false;
+bool manualTimeoutLogged = false;
+bool junctionApproachSlowActive = false;
+int junctionApproachLeftSpeed = 0;
+int junctionApproachRightSpeed = 0;
+
+bool hasTwoSidedJunctionPattern(const int sensors[5])
+{
+    return sensors[0] == 1 && sensors[4] == 1;
+}
 }
 
 void setup()
@@ -109,10 +119,7 @@ void loop()
     else if (!gObstacleDetected && obstaclePaused)
     {
         const uint32_t pauseDuration = millis() - obstaclePauseStartedAt;
-        if (gTurn != 0)
-        {
-            gTurnStart += pauseDuration;
-        }
+        adjustPathActionClock(pauseDuration);
         gJunctionSince = 0;
         gCenteredSince = 0;
         resetPidState();
@@ -172,6 +179,7 @@ void loop()
     // OBSTACLE PAUSE
     if (gObstacleDetected)
     {
+        junctionApproachSlowActive = false;
         stopMotors();
         gLeftSpeed = 0;
         gRightSpeed = 0;
@@ -180,29 +188,46 @@ void loop()
         return;
     }
 
+    if (updatePathAction())
+    {
+        telemetryThrottled();
+        delay(LINE_LOOP_DELAY_MS);
+        return;
+    }
+
     // Detect PATH junctions before entering line-following PID.
-    // A turn already in progress must finish before another route symbol is consumed.
+    // Timed route actions must finish before another route symbol is consumed.
     if (robotMode == MODE_PATH && gTurn == 0)
     {
-        bool lineBeforeGap = false;
-        bool gapAfterLine = false;
-        bool pattern = false;
+        const bool pattern = hasTwoSidedJunctionPattern(gSensor);
 
-        for (int i = 0; i < 5; i++)
+        if (pattern != junctionPatternActive)
         {
-            if (gSensor[i] == 1)
-            {
-                if (gapAfterLine)
-                {
-                    pattern = true;
-                    break;
-                }
+            junctionPatternActive = pattern;
+            char event[96];
+            snprintf(event, sizeof(event),
+                     "[JUNCTION] %s S=%d%d%d%d%d armed=%s",
+                     pattern ? "PATTERN DETECTED" : "pattern cleared",
+                     gSensor[0], gSensor[1], gSensor[2],
+                     gSensor[3], gSensor[4],
+                     gJunctionArmed ? "yes" : "no");
+            Serial.println(event);
+            sendEventLog(event);
 
-                lineBeforeGap = true;
-            }
-            else if (lineBeforeGap)
+            if (pattern && gJunctionArmed && !junctionApproachSlowActive)
             {
-                gapAfterLine = true;
+                junctionApproachLeftSpeed = gLeftSpeed;
+                junctionApproachRightSpeed = gRightSpeed;
+                junctionApproachSlowActive = true;
+
+                const int approachLeft = junctionApproachLeftSpeed *
+                    JUNCTION_APPROACH_PERCENT / 100;
+                const int approachRight = junctionApproachRightSpeed *
+                    JUNCTION_APPROACH_PERCENT / 100;
+                driveMotors(approachLeft, approachRight);
+
+                Serial.println("[JUNCTION] APPROACH SLOW to 50% while confirming");
+                sendEventLog("[JUNCTION] APPROACH SLOW to 50% while confirming");
             }
         }
 
@@ -216,17 +241,21 @@ void loop()
         else
         {
             gJunctionSince = 0;
+            junctionApproachSlowActive = false;
         }
 
-        if (!pattern && active <= 2 && s3on)
+        if (!pattern && s3on)
         {
             if (gCenteredSince == 0)
             {
                 gCenteredSince = millis();
             }
-            else if (millis() - gCenteredSince >= CENTER_ARM_MS)
+            else if (!gJunctionArmed &&
+                     millis() - gCenteredSince >= CENTER_ARM_MS)
             {
                 gJunctionArmed = true;
+                Serial.println("[JUNCTION] detector ARMED");
+                sendEventLog("[JUNCTION] detector ARMED");
             }
         }
         else
@@ -234,18 +263,40 @@ void loop()
             gCenteredSince = 0;
         }
 
-        if (gJunctionArmed && gJunctionSince != 0 &&
-            millis() - gJunctionSince >= JUNCTION_STABLE_MS)
+        if (pattern && gJunctionArmed)
         {
-            gJunctionArmed = false;
-            gJunctionSince = 0;
+            if (gJunctionSince != 0 &&
+                millis() - gJunctionSince >= JUNCTION_STABLE_MS)
+            {
+                gJunctionArmed = false;
+                gJunctionSince = 0;
+                junctionApproachSlowActive = false;
 
-            handleJunction(s1on, s5on);
+                handleJunction(s1on, s5on);
+
+                telemetryThrottled();
+                delay(LINE_LOOP_DELAY_MS);
+                return;
+            }
+
+            if (junctionApproachSlowActive)
+            {
+                const int approachLeft = junctionApproachLeftSpeed *
+                    JUNCTION_APPROACH_PERCENT / 100;
+                const int approachRight = junctionApproachRightSpeed *
+                    JUNCTION_APPROACH_PERCENT / 100;
+                driveMotors(approachLeft, approachRight);
+            }
 
             telemetryThrottled();
             delay(LINE_LOOP_DELAY_MS);
             return;
         }
+    }
+    else if (junctionPatternActive)
+    {
+        junctionPatternActive = false;
+        Serial.println("[JUNCTION] pattern cleared (PATH detector inactive)");
     }
 
     // STOP
@@ -254,10 +305,6 @@ void loop()
         stopMotors();
         gLeftSpeed = 0;
         gRightSpeed = 0;
-
-        Serial.printf("S=%d%d%d%d%d  STOP\n",
-                      gSensor[0], gSensor[1], gSensor[2],
-                      gSensor[3], gSensor[4]);
 
         telemetryThrottled();
         delay(LINE_LOOP_DELAY_MS);
@@ -272,15 +319,16 @@ void loop()
             stopMotors();
             gLeftSpeed = 0;
             gRightSpeed = 0;
-            Serial.println("  >>> MANUAL: TIMEOUT -> STOP");
+            if (!manualTimeoutLogged)
+            {
+                Serial.println("[MANUAL] command timeout; motors stopped");
+                manualTimeoutLogged = true;
+            }
         }
         else
         {
             applyManualDrive();
-            Serial.printf("S=%d%d%d%d%d  MANUAL %s L=%d R=%d\n",
-                          gSensor[0], gSensor[1], gSensor[2],
-                          gSensor[3], gSensor[4],
-                          driveDir, gLeftSpeed, gRightSpeed);
+            manualTimeoutLogged = false;
         }
 
         telemetryThrottled();
@@ -288,16 +336,15 @@ void loop()
         return;
     }
 
-    // PATH: dang re
-    if (robotMode == MODE_PATH && gTurn != 0)
+    // Keep the previous motor command for outermost-sensor-only readings.
+    const bool outermostOnly =
+        (gSensor[0] == 1 && gSensor[1] == 0 && gSensor[2] == 0 &&
+         gSensor[3] == 0 && gSensor[4] == 0) ||
+        (gSensor[0] == 0 && gSensor[1] == 0 && gSensor[2] == 0 &&
+         gSensor[3] == 0 && gSensor[4] == 1);
+
+    if (outermostOnly && (gLeftSpeed != 0 || gRightSpeed != 0))
     {
-        updateTurn(s3on, active);
-
-        Serial.printf("S=%d%d%d%d%d  TURN %s\n",
-                      gSensor[0], gSensor[1], gSensor[2],
-                      gSensor[3], gSensor[4],
-                      gTurn > 0 ? "R" : "L");
-
         telemetryThrottled();
         delay(LINE_LOOP_DELAY_MS);
         return;
@@ -314,12 +361,6 @@ void loop()
     int rightSpeed = constrain((int)(baseSpeed + correction), -maxSpeed, maxSpeed);
 
     driveMotors(leftSpeed, rightSpeed);
-
-    Serial.printf("S=%d%d%d%d%d  Error=%.2f PID=%.2f L=%d R=%d %s\n",
-                  gSensor[0], gSensor[1], gSensor[2],
-                  gSensor[3], gSensor[4],
-                  error, correction, leftSpeed, rightSpeed,
-                  modeName());
 
     telemetryThrottled();
 

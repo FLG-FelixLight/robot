@@ -14,9 +14,11 @@ BẢN 1 — DÙNG TRỰC TIẾP TRÊN SLIDE (8 gạch đầu dòng)
 ----------------------------------------------------------
 
 - Route code là chuỗi quyết định ở các junction trên track đã biết
-- L = rẽ trái; R = rẽ phải; S = đi thẳng qua junction
+- Ở junction: dừng 2 giây; L/R quay đến khi S3 bắt lại line (timeout 1,5 giây); S chạy 0,5 giây
+- L = motor trái đứng yên, motor phải tiến; R = motor phải đứng yên, motor trái tiến
+- S = cả hai motor tiến trong 0,5 giây
 - 0 = dừng ở junction được phát hiện tiếp theo, phát welcome.mp3
-- Ví dụ `L0`: rẽ trái tại junction 1; dừng tại junction 2
+- Robot xuất phát trên line, tới junction đầu tiên mới dùng ký tự đầu; `L0`: action trái ở junction 1, dừng tại junction 2
 - Robot đọc lần lượt từng ký tự khi gặp ngã ba
 - Bảng điểm đến lưu trong LittleFS (/tables.json)
 - Web cho phép thêm/sửa/xóa rồi lưu bảng lên ESP32
@@ -27,7 +29,7 @@ BẢN 1 — DÙNG TRỰC TIẾP TRÊN SLIDE (8 gạch đầu dòng)
 BẢN 2 — BỔ SUNG CỦA NHÓM (2 ký tự mở rộng)
 ----------------------------------------------------------
 
-- S = tiêu thụ lệnh ở junction và tiếp tục bám line thẳng
+- S = sau khi dừng 2 giây tại junction, chạy thẳng 0,5 giây rồi tiếp tục bám line
 - 0 = dừng tại junction được phát hiện; phát audio ngay và giữ STOP ≥ 5 s
 - 0 bắt buộc là ký tự cuối, mã tối đa 90 ký tự
 - Chỉ chấp nhận L, R, S, 0 → kiểm tra ngay trên web và trên firmware
@@ -39,9 +41,9 @@ BẢNG KÝ TỰ (đặt bên phải slide)
 
 Ký tự | Ý nghĩa
 ------+--------------------------------------------
-  L   | Rẽ trái ở ngã ba kế tiếp
-  R   | Rẽ phải ở ngã ba kế tiếp
-  S   | Đi thẳng qua ngã ba kế tiếp
+  L   | Dừng 2 giây; motor phải tiến tới khi S3 bắt lại line, timeout 1,5 giây
+  R   | Dừng 2 giây; motor trái tiến tới khi S3 bắt lại line, timeout 1,5 giây
+  S   | Dừng 2 giây; cả hai motor tiến 0,5 giây
   0   | Dừng tại junction này; phát welcome.mp3; giữ STOP ít nhất 5 s
 
 
@@ -49,12 +51,12 @@ Ký tự | Ý nghĩa
 VÍ DỤ MINH HOẠ — LRLSLR0
 ----------------------------------------------------------
 
-Ngã 1: L → rẽ trái
-Ngã 2: R → rẽ phải
-Ngã 3: L → rẽ trái
-Ngã 4: S → đi thẳng
-Ngã 5: L → rẽ trái
-Ngã 6: R → rẽ phải
+Ngã 1: L → dừng 2 giây, rẽ đến khi S3 bắt line (timeout 1,5 giây)
+Ngã 2: R → dừng 2 giây, rẽ đến khi S3 bắt line (timeout 1,5 giây)
+Ngã 3: L → dừng 2 giây, rẽ đến khi S3 bắt line (timeout 1,5 giây)
+Ngã 4: S → dừng 2 giây, chạy thẳng 0,5 giây
+Ngã 5: L → dừng 2 giây, rẽ đến khi S3 bắt line (timeout 1,5 giây)
+Ngã 6: R → dừng 2 giây, rẽ đến khi S3 bắt line (timeout 1,5 giây)
 Ngã 7: 0 → dừng, phát welcome.mp3, giữ STOP ≥ 5 s
 
 → Sáu junction đầu tiêu thụ lệnh L/R/S; junction thứ 7 là điểm dừng.
@@ -67,10 +69,10 @@ BẢNG ĐIỂM ĐẾN MẪU (data/tables.json)
 
 ID | Mã        | Diễn giải
 ---+-----------+-----------------------------------------
- 1 | S0        | Đi thẳng 1 ngã rồi dừng
- 2 | L0        | Rẽ trái ở ngã đầu; dừng và phát âm thanh ở ngã tiếp theo
- 3 | LRLSLR0   | Trái → Phải → Trái → Thẳng → Trái → Phải → Dừng
- 4 | RSR0      | Phải → Thẳng → Phải → Dừng
+ 1 | S0        | Action thẳng tại junction 1; dừng và phát âm thanh tại junction 2
+ 2 | L0        | Action trái tại junction 1; dừng và phát âm thanh tại junction 2
+ 3 | LRLSLR0   | Sáu action L/R/S; dừng và phát âm thanh tại junction 7
+ 4 | RSR0      | Ba action R/S/R; dừng và phát âm thanh tại junction 4
 
 
 ----------------------------------------------------------
@@ -92,14 +94,15 @@ GHI CHÚ THUYẾT TRÌNH (speaker notes)
 
 - Route code quy định hành động tại từng junction được nhận diện; cần
   topology track cố định và vị trí bắt đầu quy ước để giải thích tuyến.
-- `L0`: L được tiêu thụ ở junction đầu, robot quay trái rồi bám line;
+- `L0`: L được tiêu thụ ở junction đầu sau khi xuất phát trên line; robot dừng 2 giây,
+  cho motor phải chạy 0,5 giây trong khi motor trái đứng yên rồi bám line;
   0 được tiêu thụ ở junction tiếp theo, dừng và yêu cầu phát welcome.mp3.
 - STOP giữ ít nhất 5 giây; sau đó vẫn chờ lệnh mới. Không tự quay về.
 - Thay đổi bảng trên trình duyệt là local cho đến khi bấm "Lưu lên robot".
   PUT thành công thì LittleFS và map RAM được cập nhật.
-- Điều kiện detector trong code là pattern `1...0...1`, debounce 30 ms,
-  cần arm bằng trạng thái giữa 200 ms. Người dùng báo detector hiện chưa
-  hoạt động trên robot; chưa có log để xác định nguyên nhân.
+- Điều kiện detector trong code là S1 và S5 cùng thấy line; pattern cần ổn
+  định 30 ms và detector cần arm bằng S3 thấy line liên tục 200 ms. Cần kiểm
+  chứng lại trên robot; line thẳng quá rộng cũng có thể kích hoạt tiêu chí này.
 - Mã hợp lệ: L/R/S tùy ý (có thể rỗng) rồi đúng 0 cuối; tối đa 90 ký tự.
 
 

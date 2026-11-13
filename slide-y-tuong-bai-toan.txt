@@ -56,8 +56,9 @@ GHI CHÚ THUYẾT TRÌNH (speaker notes)
   biết ngã ba.
 - Mã tuyến là chuỗi quyết định ở từng junction trên sa bàn. Chỉ mô hình
   thành cây nếu topology của track thực sự là cây.
-- Ví dụ `L0`: rẽ trái tại junction thứ nhất, bám line tiếp, rồi dừng ở
-  junction kế tiếp và phát `welcome.mp3`.
+- Robot xuất phát trên line; ví dụ `L0`: tới junction đầu thì dừng 2 giây,
+  motor phải tiến/motor trái đứng yên tới khi S3 bắt lại line (timeout 1,5 giây), rồi bám line tới junction kế
+  tiếp và dừng, phát `welcome.mp3`.
 - Bảng tuyến có thể được sửa trên web và lưu trong LittleFS.
 - Firmware có siêu âm để tạm dừng motor khi vật cản gần; chưa tự tránh
   vật cản. Chức năng và detector junction cần được xác nhận trên robot.

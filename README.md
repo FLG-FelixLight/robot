@@ -6,7 +6,8 @@ có điều khiển web qua WiFi (WebSocket), chọn điểm đến, hiển th�
 ## Chức năng chính
 
 - Dò line 5 cảm biến (S1..S5) với bộ điều khiển PID.
-- Nhận dạng ngã ba / ngã tư, rẽ trái - phải - đi thẳng theo bản đồ đường đi.
+- Firmware chuẩn hóa cảm biến thành bit `1` = có line, `0` = không có line; nếu chỉ mắt ngoài S1 hoặc S5 thấy line thì giữ nguyên lệnh motor trước đó.
+- Đi theo mã tuyến: junction được xác nhận khi S1 và S5 cùng thấy line; mỗi junction dừng 2 giây; L/R rẽ đến khi cảm biến giữa bắt lại line (timeout an toàn 1,5 giây), S chạy thẳng 0,5 giây rồi tiếp tục bám line; ký tự `0` dừng và phát âm thanh.
 - Chọn điểm đến (destination) và hiển thị trạng thái trên web.
 - Web server nhúng (LittleFS) + WebSocket telemetry ~100 ms/lần.
 - Hiển thị đồng hồ / trạng thái bằng TM1637.

@@ -390,6 +390,32 @@ footer {
     word-break: break-word;
 }
 
+.event-log {
+    max-height: 220px;
+    overflow-y: auto;
+    padding: 10px 12px;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    background: var(--card2);
+    color: var(--txt);
+    font: 12px/1.6 Consolas, "Courier New", monospace;
+}
+
+.event-log-entry {
+    overflow-wrap: anywhere;
+    border-bottom: 1px solid var(--line);
+    padding: 3px 0;
+}
+
+.event-log-entry:last-child {
+    border-bottom: none;
+}
+
+.event-log-time,
+.event-log-empty {
+    color: var(--muted);
+}
+
 /* ================= DESTINATION ================= */
 
 .destform {
@@ -476,4 +502,3 @@ footer {
     color: var(--txt);
     border: 1px solid var(--line);
 }
-

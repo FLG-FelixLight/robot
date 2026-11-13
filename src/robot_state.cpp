@@ -41,7 +41,6 @@ size_t gPathIdx = 0;
 int gDestId = 0;
 
 int gTurn = 0;
-unsigned long gTurnStart = 0;
 
 bool gJunctionArmed = false;
 unsigned long gJunctionSince = 0;

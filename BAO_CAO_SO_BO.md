@@ -114,7 +114,7 @@ flowchart TB
     MODE -->|"STOP"| STOP["stopMotors()"]
     MODE -->|"AUTO"| PID["readLine() → calculatePID()"]
     MODE -->|"MANUAL"| MAN["applyManualDrive()"]
-    MODE -->|"PATH"| JUNC["junction detect before PID<br/>+ updateTurn()"]
+    MODE -->|"PATH"| JUNC["junction detector + timed route actions"]
 
     PID --> MOT["motorLeft() / motorRight()"]
     MAN --> MOT
@@ -143,9 +143,8 @@ sequenceDiagram
     S->>S: tra gTables[3] = "LRLSLR0"
     S->>S: đưa lệnh vào Command Queue
     L->>L: nhận lệnh, đặt MODE_PATH và gPathIdx = 0
-    loop Mỗi ngã rẽ hợp lệ
-        L->>L: kiểm tra pattern trước PID (nếu chưa đang quay)
-        L->>L: tiêu thụ L/R/S; L/R vào state TURN
+    loop Mỗi junction được xác nhận
+        L->>L: L/R → STOP 2 s, quay tới khi S3 bắt lại line (timeout 1,5 s); S → chạy thẳng 0,5 s
         L->>L: 0 → STOP, phát welcome.mp3, giữ STOP ≥ 5 s
     end
     L-->>W: telemetry danh nghĩa 10 Hz
@@ -221,7 +220,7 @@ sequenceDiagram
 
 | Chức năng | Thiết bị | GPIO ESP32-S3 | Ghi chú |
 |---|---|---|---|
-| OUT1–OUT5 | 5 mắt dò line | 4, 5, 6, 7, 15 | `INPUT`, `LINE_ON = HIGH` |
+| OUT1–OUT5 | 5 mắt dò line | 4, 5, 6, 7, 15 | `INPUT`, `LINE_ON = HIGH` theo cấu hình hiện tại |
 | ENA | L298N | 16 | PWM tốc độ bánh trái |
 | IN1 / IN2 | L298N | 17 / 18 | Chiều quay bánh trái |
 | IN3 / IN4 | L298N | 8 / 3 | Chiều quay bánh phải (**GPIO3 là strapping**) |
@@ -269,7 +268,7 @@ sequenceDiagram
 | `robot_config.h`, `robot_state.h/.cpp` | Chân GPIO, hằng số, `RobotMode`, `Command`, trạng thái dùng chung | Cấu hình và khai báo trạng thái firmware |
 | `motor_control.h/.cpp` | `motorLeft()`, `motorRight()`, `readSensors()`, `readLine()`, `calculatePID()` | Điều khiển động cơ, đọc line, PID và lái tay |
 | `destination_manager.h/.cpp` | `loadTables()`, `saveTablesFromJson()`, `tablesJson()`, `pathValid()` | Quản lý bảng điểm đến trong LittleFS |
-| `path_control.h/.cpp` | `handleJunction()`, `updateTurn()`, `arrived()` | Thực thi ký tự route, state quay và dừng đích; detector nằm trong `main.cpp` |
+| `path_control.h/.cpp` | `handleJunction()`, `updatePathAction()`, `arrived()` | Thực thi mã tuyến với khoảng dừng/action theo thời gian; detector nằm trong `main.cpp` |
 | `web_control.h/.cpp` | `onWsEvent()`, `handleCommand()`, `applyCommand()`, `sendTelemetry()` | WebSocket, REST API, lệnh và telemetry |
 | `audio_control.h/.cpp` | `setupAudio()`, `audioTask()` | Phát MP3 trong task riêng, core 0 |
 | `network.h/.cpp` | `connectWiFi()` | Kết nối Wi-Fi STA |
@@ -285,19 +284,20 @@ flowchart TD
     B --> C["Đọc S1..S5, chuẩn hóa theo LINE_ON"]
     C --> D{"Có vật cản?"}
     D -->|"Có"| X["Dừng motor, telemetry, delay 5 ms"]
-    D -->|"Không"| E{"MODE_PATH và không đang rẽ?"}
-    E -->|"Có"| F["Cập nhật detector pattern 1...0...1"]
+    D -->|"Không"| E{"MODE_PATH và không đang action?"}
+    E -->|"Có"| F["Cập nhật detector junction hai phía S1/S5"]
     F --> G{"Armed 200 ms + pattern ổn định 30 ms?"}
     G -->|"Có"| H["Tiêu thụ ký tự route"]
     H --> I{"L / R / S / 0"}
-    I -->|"L/R"| J["Quay cho tới khi bắt lại line"]
-    I -->|"S"| K["Reset PID, tiếp tục thẳng"]
+    I -->|"L/R"| J["Dừng 2 s, quay đến khi S3 bắt line (timeout 1,5 s)"]
+    I -->|"S"| K["Dừng 2 s, chạy thẳng 0,5 s"]
+    J --> K["Reset PID, tiếp tục bám line"]
     I -->|"0"| L["STOP + phát welcome.mp3<br/>giữ STOP tối thiểu 5 s"]
     G -->|"Không"| M
     E -->|"Không"| M{"MODE"}
     M -->|"STOP"| N["Dừng motor"]
     M -->|"MANUAL"| O["Lái tay / timeout 600 ms"]
-    M -->|"PATH đang rẽ"| J
+    M -->|"PATH đang action"| J
     M -->|"AUTO hoặc PATH follow"| P["Tính error → PID"]
     P --> Q["left = base - correction<br/>right = base + correction"]
     Q --> R["Xuất PWM tới L298N"]
@@ -365,19 +365,19 @@ flowchart TD
 
 ### 5.4 Nhận diện ngã rẽ
 
-Trong MODE_PATH, code hiện coi mẫu là ngã rẽ nếu dãy 5 bit có một bit `0` nằm sau ít nhất một `1`, rồi có thêm một `1` phía sau. Nói ngắn gọn: tồn tại `1 ... 0 ... 1` theo thứ tự S1→S5. Các ví dụ hợp lệ gồm `10001`, `11001`, `11101`, `11011`; mẫu `11100` không hợp lệ vì không có `1` nằm sau khoảng trống. Đây là quy tắc theo code hiện tại, không phải kết quả đã hiệu chỉnh bằng thực nghiệm.
+Trong MODE_PATH, code xác nhận mẫu hai phía khi S1 và S5 cùng thấy line; trạng thái S2–S4 không ảnh hưởng tới điều kiện này. Vì vậy `10001`, `11001`, `10101`, `11011` và `11111` đều hợp lệ; `10100` không hợp lệ vì S5 không thấy line. Tiêu chí này biểu diễn hai phía cùng được cảm nhận, nhưng cần kiểm tra trên sa bàn vì một line quá rộng trên đoạn thẳng cũng có thể làm cả S1 và S5 cùng thấy line.
 
 ```
-pattern = tồn tại i < j < k sao cho S[i] = 1, S[j] = 0, S[k] = 1
+pattern = S1 = 1 AND S5 = 1
 ```
 
 Hai điều kiện thời gian bổ sung:
 
-- **Arm 200 ms** (`CENTER_ARM_MS`): trước đó phải có trạng thái không phải pattern, S3 thấy line và tối đa 2 mắt active ổn định; nếu chưa arm thì pattern không được tiêu thụ.
+- **Arm 200 ms** (`CENTER_ARM_MS`): trước đó phải có trạng thái không phải pattern và S3 thấy line ổn định; nếu chưa arm thì pattern không được tiêu thụ.
 - **Ổn định 30 ms** (`JUNCTION_STABLE_MS`): pattern phải liên tục đủ thời gian mới gọi `handleJunction()`.
 - Detector chỉ chạy ở MODE_PATH và được đặt trước PID; vật cản vẫn dừng động cơ trước detector. Khi `gTurn != 0`, robot hoàn tất state quay trước, không xét thêm mã trong lúc quay.
 
-Lưu ý khi chẩn đoán: cấu hình hiện coi mức HIGH là thấy line (`LINE_ON = HIGH`). Nếu module xuất LOW khi gặp vạch, hoặc pattern vật lý không khớp quy tắc `1...0...1`, detector sẽ không kích hoạt. Lần thử thực tế gần nhất được báo cáo là **robot chưa phát hiện ngã rẽ**; chưa có log S1–S5 theo thời gian để xác định nguyên nhân.
+Lưu ý khi chẩn đoán: cấu hình hiện coi mức HIGH là thấy line (`LINE_ON = HIGH`) và chuẩn hóa giá trị này thành bit 1 trước khi chạy detector. Cần xác nhận cực tính với module thực tế. Tiêu chí S1/S5 sẽ loại các mẫu chỉ có một phía; cần kiểm tra log S1–S5 trên track để xác nhận cách bố trí cảm biến phù hợp.
 
 ```
         ┌──── 30 ms ────┐
@@ -387,24 +387,24 @@ pattern ─┐               ┌─────────────
               └── kích hoạt handleJunction()
 ```
 
-### 5.5 Máy trạng thái rẽ
+### 5.5 Máy trạng thái junction và action tuyến
 
 ```mermaid
 stateDiagram-v2
     [*] --> PATH_FOLLOW
-    PATH_FOLLOW --> TURN: junction hợp lệ + L hoặc R
-    TURN --> PATH_FOLLOW: bắt lại line sau TURN_MIN_MS
-    TURN --> STOP: quá TURN_MAX_MS
-    PATH_FOLLOW --> PATH_FOLLOW: junction hợp lệ + S
+    PATH_FOLLOW --> JUNCTION_STOP: junction hợp lệ + L/R/S
+    JUNCTION_STOP --> ROUTE_ACTION: dừng đủ 2 giây
+    ROUTE_ACTION --> PATH_FOLLOW: L/R bắt lại line tại S3 hoặc S chạy đủ 0,5 giây
+    ROUTE_ACTION --> STOP: L/R timeout 1,5 giây, S3 chưa bắt lại line
     PATH_FOLLOW --> DESTINATION_STOP: junction hợp lệ + 0
     DESTINATION_STOP --> AUDIO: phát welcome.mp3 ngay
     AUDIO --> STOP: giữ STOP ít nhất 5 giây, chờ lệnh mới
     PATH_FOLLOW --> OBSTACLE_PAUSE: vật cản dưới ngưỡng
-    OBSTACLE_PAUSE --> PATH_FOLLOW: vật cản được gỡ
+    OBSTACLE_PAUSE --> PATH_FOLLOW: vật cản được gỡ, tiếp tục bộ đếm action
     PATH_FOLLOW --> STOP: STOP / E-STOP
 ```
 
-Khi rẽ, xe quay tại chỗ với `TURN_SPEED = 140` (một bánh tiến, một bánh lùi). Điều kiện kết thúc: đã quay hơn 120 ms **và** mắt giữa thấy line **và** số mắt active ≤ 2. Nếu quá 1500 ms mà không thỏa điều kiện → dừng motor và chuyển MODE_STOP. Các giá trị là cấu hình mã nguồn, chưa đo hiệu quả cơ khí.
+Với `L`, bánh trái đứng yên và bánh phải tiến; với `R`, bánh phải đứng yên và bánh trái tiến; với `S`, cả hai bánh tiến. Sau khi xác nhận junction, motor dừng 2 giây. L/R tiếp tục quay đến khi S3 rời line rồi bắt lại line, tối đa 1,5 giây; nếu timeout thì robot dừng an toàn. S chạy thẳng 0,5 giây. Sau đó PID được reset và robot tiếp tục bám line. Cần kiểm chứng timeout và hành vi quay trên robot.
 
 ### 5.6 Mã đường đi và bảng điểm đến
 
@@ -412,10 +412,10 @@ Khi rẽ, xe quay tại chỗ với `TURN_SPEED = 140` (một bánh tiến, mộ
 
 | Ký tự | Ý nghĩa |
 |---|---|
-| `L` | Rẽ trái ở ngã rẽ kế tiếp |
-| `R` | Rẽ phải ở ngã rẽ kế tiếp |
-| `S` | Đi thẳng qua ngã rẽ kế tiếp |
-| `0` | Đi tới ngã rẽ kế tiếp, dừng, phát `welcome.mp3`, giữ STOP ít nhất 5 giây (bắt buộc là ký tự cuối) |
+| `L` | Ở junction kế tiếp: dừng 2 giây, motor trái đứng yên, motor phải tiến đến khi S3 bắt lại line (timeout 1,5 giây) |
+| `R` | Ở junction kế tiếp: dừng 2 giây, motor phải đứng yên, motor trái tiến đến khi S3 bắt lại line (timeout 1,5 giây) |
+| `S` | Ở junction kế tiếp: dừng 2 giây, cả hai motor tiến 0,5 giây rồi bám line |
+| `0` | Đi tới junction kế tiếp, dừng, phát `welcome.mp3`, giữ STOP ít nhất 5 giây (bắt buộc là ký tự cuối) |
 
 **Ví dụ**
 
@@ -529,7 +529,7 @@ Thông tin hiển thị realtime: 5 cảm biến, `error`, `correction`, tốc �
 
 ## 8. HẠN CHẾ
 
-1. **Phát hiện ngã rẽ chưa hoạt động ổn định**: người dùng báo robot hiện không phát hiện ngã rẽ. Code đòi hỏi `LINE_ON = HIGH`, pattern `1...0...1`, arm 200 ms và pattern ổn định 30 ms; chưa có log cảm biến để biết điều kiện nào không đạt.
+1. **Phát hiện ngã rẽ chưa được xác nhận trên phần cứng**: detector hiện yêu cầu S1 và S5 cùng thấy line, đã arm 200 ms và pattern ổn định 30 ms. Một vạch thẳng rộng cũng có thể làm cả hai mắt ngoài thấy line; cần kiểm chứng tiêu chí này bằng log cảm biến trên track.
 2. **Chưa có encoder**: không đo tốc độ thực; khác biệt giữa động cơ có thể gây lệch tuyến.
 3. **Mất line chưa xử lý fail-safe**: `readLine()` giữ `lastError`; chưa có timeout mất line để dừng.
 4. **Chưa đo tần số vòng điều khiển**: delay được đặt 5 ms, nhưng thời gian xử lý, Serial logging, Wi-Fi và audio làm chu kỳ thực chưa xác định.
@@ -598,10 +598,10 @@ AUTO và PATH vẫn chạy vì vòng điều khiển nằm trong `loop()`. MANUA
 WebSocket chạy ở task khác. Nếu task web gọi thẳng `stopMotors()` hay sửa biến PID sẽ xảy ra tranh chấp. Queue đảm bảo mọi thay đổi trạng thái đều diễn ra tuần tự trong `loop()`.
 
 **5. Code hiện nhận diện ngã rẽ thế nào, và đã chạy ổn chưa?**
-Trong MODE_PATH code tìm pattern `1...0...1`, yêu cầu đã arm bằng trạng thái giữa ổn định 200 ms và pattern giữ 30 ms; detector được đặt trước PID. Tuy nhiên người dùng đã báo robot chưa nhận ngã rẽ trong thử nghiệm. Chưa có log S1–S5 nên chưa kết luận nguyên nhân hoặc khẳng định tính năng hoạt động.
+Trong MODE_PATH code yêu cầu S1 và S5 cùng thấy line, detector đã arm bằng S3 thấy line ổn định 200 ms và pattern giữ 30 ms. Detector được đặt trước PID. Tiêu chí này cần được kiểm chứng lại trên robot thật bằng log S1–S5.
 
 **6. Nếu bánh xe chạy ngược?**
-Đảo hai dây động cơ, hoặc đảo `IN1/IN2` (và `IN3/IN4`) trong code. Nếu cảm biến báo ngược (line = LOW), đổi `#define LINE_ON LOW`.
+Đảo hai dây động cơ, hoặc đảo `IN1/IN2` (và `IN3/IN4`) trong code. Cấu hình cảm biến hiện đặt `#define LINE_ON HIGH`; nếu đo trên module cho thấy line được báo bằng mức LOW thì đổi cấu hình tương ứng.
 
 **7. Tại sao dùng LittleFS?**
 Project cấu hình PlatformIO với `board_build.filesystem = littlefs`; bảng điểm đến và tài nguyên web/audio được lưu dưới dạng tệp. Chưa có benchmark trong dự án để kết luận ưu thế hiệu năng so với filesystem khác.

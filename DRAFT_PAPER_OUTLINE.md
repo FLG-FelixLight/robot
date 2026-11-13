@@ -14,7 +14,7 @@ This is a prototype/system paper outline. Do not claim autonomous delivery perfo
 |---|---|---|
 | Firmware architecture and configured behavior | Source code in `src/`; PlatformIO build succeeded | Versioned source snapshot and board/firmware identification |
 | Web/API and destination persistence | Implementation in `data/` and firmware | End-to-end test against a physical ESP32 |
-| Junction detector | Code searches for `1...0...1`, 30 ms debounce, and 200 ms center-arm condition | Sensor logs and repeated on-track trials; user currently reports that junctions are not detected |
+| Junction detector | Requires both outer sensors S1 and S5 on line, 30 ms debounce, and 200 ms center-arm condition | Sensor logs and repeated on-track trials |
 | PID line following | Code implements weighted line error and PID | Track trials, recorded errors, speed, and tuning protocol |
 | Obstacle pause, clock display, and audio | Implemented in source | Hardware validation, safety checks, measured response |
 | Performance and reliability | No runtime measurements available | Raw data, trial counts, environment, uncertainty/statistics |
@@ -87,13 +87,11 @@ where correction is computed by PID. Initial configured parameters are `Kp=35`, 
 
 #### Route code and junction detector
 
-- `L`: turn left at the next accepted junction.
-- `R`: turn right at the next accepted junction.
-- `S`: consume a junction and continue line following.
+- The robot starts on the line and follows it until the first junction is confirmed; only then does it consume the first route symbol.
+- At a confirmed junction, stop for 2 seconds. For `L`/`R`, drive the corresponding single motor until center sensor S3 leaves and reacquires the line, with a 1.5-second safety timeout; stop if it does not reacquire. For `S`, drive both motors forward for 0.5 seconds, then resume line following.
 - `0`: stop at the next accepted junction, request `welcome.mp3`, and remain in STOP for at least 5 seconds.
-- Current detector: a `1...0...1` pattern across S1–S5, 30 ms stable-pattern condition, and a prior centered/armed condition held for 200 ms.
-- Turn completion in code requires more than 120 ms of turning, center sensor on, and no more than two active sensors; timeout is 1500 ms.
-- These values are implementation settings, not measured optimum values.
+- Current detector: both outer sensors S1/S5 must see line, with a 30 ms stable-pattern condition and a prior S3-centered/armed condition held for 200 ms.
+- The junction stop is configured as 2000 ms, the straight action as 500 ms, and the L/R reacquisition timeout as 1500 ms; these implementation settings have not been validated on the physical robot.
 
 Important current issue: the user reports that the robot does not detect junctions. Treat this as an unresolved runtime fault, not a successful result. Capture raw S1–S5 values while moving over a straight line, gap, and junction; also record mode, `gJunctionArmed`, pattern duration, and obstacle state.
 
