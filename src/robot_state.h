@@ -70,8 +70,8 @@ extern size_t gPathIdx;
 extern int gDestId;
 extern int gTurn;
 extern unsigned long gTurnStart;
+extern bool gTurnPause;
 extern bool gJunctionArmed;
-extern unsigned long gJunctionSince;
 extern unsigned long gCenteredSince;
 extern std::map<int, String> gTables;
 

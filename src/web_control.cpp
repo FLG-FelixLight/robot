@@ -91,6 +91,7 @@ void applyCommand(const Command &c)
             gPathIdx = 0;
             gDestId = 0;
             gTurn = 0;
+            gTurnPause = false;
             gJunctionArmed = false;
             gCenteredSince = 0;
 
@@ -108,9 +109,9 @@ void applyCommand(const Command &c)
             gPathIdx = 0;
             gDestId = c.value;
             gTurn = 0;
+            gTurnPause = false;
             gJunctionArmed = false;
             gCenteredSince = 0;
-            gJunctionSince = 0;
 
             {
                 char b[96];
@@ -127,6 +128,7 @@ void applyCommand(const Command &c)
             robotMode = MODE_STOP;
             strlcpy(driveDir, "stop", sizeof(driveDir));
             gTurn = 0;
+            gTurnPause = false;
             gPath = "";
             gPathIdx = 0;
             stopMotors();

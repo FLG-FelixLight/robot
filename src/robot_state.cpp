@@ -4,11 +4,11 @@
 #include "AudioGeneratorMP3.h"
 #include "AudioOutputI2S.h"
 
-float Kp = 35.0;
+float Kp = 75.0;
 float Ki = 0.0;
 float Kd = 20.0;
 
-int baseSpeed = 150;
+int baseSpeed = 120;
 int maxSpeed = 255;
 
 float error = 0;
@@ -42,9 +42,9 @@ int gDestId = 0;
 
 int gTurn = 0;
 unsigned long gTurnStart = 0;
+bool gTurnPause = false;
 
 bool gJunctionArmed = false;
-unsigned long gJunctionSince = 0;
 unsigned long gCenteredSince = 0;
 
 std::map<int, String> gTables;

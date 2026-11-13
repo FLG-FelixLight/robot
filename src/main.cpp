@@ -113,7 +113,6 @@ void loop()
         {
             gTurnStart += pauseDuration;
         }
-        gJunctionSince = 0;
         gCenteredSince = 0;
         resetPidState();
         obstaclePaused = false;
@@ -184,41 +183,11 @@ void loop()
     // A turn already in progress must finish before another route symbol is consumed.
     if (robotMode == MODE_PATH && gTurn == 0)
     {
-        bool lineBeforeGap = false;
-        bool gapAfterLine = false;
-        bool pattern = false;
+        const bool pattern = s1on && !s3on && s5on;
 
-        for (int i = 0; i < 5; i++)
-        {
-            if (gSensor[i] == 1)
-            {
-                if (gapAfterLine)
-                {
-                    pattern = true;
-                    break;
-                }
-
-                lineBeforeGap = true;
-            }
-            else if (lineBeforeGap)
-            {
-                gapAfterLine = true;
-            }
-        }
-
-        if (pattern)
-        {
-            if (gJunctionSince == 0)
-            {
-                gJunctionSince = millis();
-            }
-        }
-        else
-        {
-            gJunctionSince = 0;
-        }
-
-        if (!pattern && active <= 2 && s3on)
+        // Chỉ "arm" khi robot đang bám line ở giữa (S3 thấy line, S1/S5 không thấy)
+        // liên tục đủ CENTER_ARM_MS (200 ms).
+        if (!pattern && !s1on && s3on && !s5on)
         {
             if (gCenteredSince == 0)
             {
@@ -234,11 +203,12 @@ void loop()
             gCenteredSince = 0;
         }
 
-        if (gJunctionArmed && gJunctionSince != 0 &&
-            millis() - gJunctionSince >= JUNCTION_STABLE_MS)
+        // Đã armed + thấy pattern ngã rẽ -> thực hiện lệnh rẽ ngay:
+        // handleJunction() dừng động cơ (rồi updateTurn() dừng đủ TURN_PAUSE_MS = 2s,
+        // sau đó xoay TURN_DURATION_MS theo hướng L/R trong mã đường đi).
+        if (pattern && gJunctionArmed)
         {
             gJunctionArmed = false;
-            gJunctionSince = 0;
 
             handleJunction(s1on, s5on);
 
@@ -291,12 +261,14 @@ void loop()
     // PATH: dang re
     if (robotMode == MODE_PATH && gTurn != 0)
     {
-        updateTurn(s3on, active);
+        updateTurn();
 
-        Serial.printf("S=%d%d%d%d%d  TURN %s\n",
+        const char *turnStatus = gTurn == 0 ? "DONE" : (gTurnPause ? "WAIT" : "ROTATE");
+        Serial.printf("S=%d%d%d%d%d  PATH TURN %s %s\n",
                       gSensor[0], gSensor[1], gSensor[2],
                       gSensor[3], gSensor[4],
-                      gTurn > 0 ? "R" : "L");
+                      gTurn == 0 ? "-" : (gTurn > 0 ? "R" : "L"),
+                      turnStatus);
 
         telemetryThrottled();
         delay(LINE_LOOP_DELAY_MS);

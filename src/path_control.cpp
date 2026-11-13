@@ -16,6 +16,7 @@ void arrived(const char *why)
     gLeftSpeed = 0;
     gRightSpeed = 0;
     gTurn = 0;
+    gTurnPause = false;
     robotEnabled = false;
     robotMode = MODE_STOP;
 
@@ -55,14 +56,22 @@ void handleJunction(bool leftOn, bool rightOn)
 
     if (c == 'L')
     {
+        stopMotors();
+        gLeftSpeed = 0;
+        gRightSpeed = 0;
         gTurn = -1;
         gTurnStart = millis();
+        gTurnPause = true;
         Serial.println("[PATH] -> LEFT");
     }
     else if (c == 'R')
     {
+        stopMotors();
+        gLeftSpeed = 0;
+        gRightSpeed = 0;
         gTurn = +1;
         gTurnStart = millis();
+        gTurnPause = true;
         Serial.println("[PATH] -> RIGHT");
     }
     else
@@ -92,43 +101,47 @@ void updateDestinationHold()
     }
 }
 
-bool updateTurn(bool centerOn, int active)
+void updateTurn()
 {
-    int spd = TURN_SPEED;
+    const unsigned long now = millis();
 
+    if (gTurnPause)
+    {
+        stopMotors();
+        gLeftSpeed = 0;
+        gRightSpeed = 0;
+
+        if (now - gTurnStart >= TURN_PAUSE_MS)
+        {
+            gTurnPause = false;
+            gTurnStart = now;
+        }
+
+        return;
+    }
+
+    const int speed = TURN_SPEED;
     if (gTurn > 0)
     {
-        driveMotors(spd, -spd);
+        driveMotors(speed, -speed);
     }
     else
     {
-        driveMotors(-spd, spd);
+        driveMotors(-speed, speed);
     }
 
-    unsigned long dt = millis() - gTurnStart;
-
-    if (dt > TURN_MAX_MS)
+    if (now - gTurnStart >= TURN_DURATION_MS)
     {
         gTurn = 0;
+        stopMotors();
         gLeftSpeed = 0;
         gRightSpeed = 0;
-        stopMotors();
-        robotMode = MODE_STOP;
-        setNotice("TURN TIMEOUT -> STOP");
-        Serial.println("[PATH] turn timeout");
-        return false;
-    }
-
-    if (dt > TURN_MIN_MS && centerOn && active <= 2)
-    {
-        gTurn = 0;
         resetPidState();
         gJunctionArmed = false;
         gCenteredSince = 0;
         setNotice("TURN OK");
     }
 
-    return true;
 }
 
 // ======================================================
