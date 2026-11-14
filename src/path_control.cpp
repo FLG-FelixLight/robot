@@ -8,6 +8,8 @@ namespace
 {
 bool destinationHoldActive = false;
 unsigned long destinationHoldStartedAt = 0;
+bool pendingJunctionLeftOn = false;
+bool pendingJunctionRightOn = false;
 }
 
 void arrived(const char *why)
@@ -26,6 +28,20 @@ void arrived(const char *why)
     Serial.println(b);
 
     sendConfig(nullptr);
+}
+
+void beginJunctionPause(bool leftOn, bool rightOn)
+{
+    stopMotors();
+    gLeftSpeed = 0;
+    gRightSpeed = 0;
+    gTurn = 0;
+    gTurnStart = millis();
+    gTurnPause = true;
+    pendingJunctionLeftOn = leftOn;
+    pendingJunctionRightOn = rightOn;
+    Serial.printf("[PATH] junction detected; stopping for %lu ms before reading code\n",
+                  (unsigned long)TURN_PAUSE_MS);
 }
 
 void handleJunction(bool leftOn, bool rightOn)
@@ -60,8 +76,6 @@ void handleJunction(bool leftOn, bool rightOn)
         gLeftSpeed = 0;
         gRightSpeed = 0;
         gTurn = -1;
-        gTurnStart = millis();
-        gTurnPause = true;
         Serial.println("[PATH] -> LEFT");
     }
     else if (c == 'R')
@@ -70,8 +84,6 @@ void handleJunction(bool leftOn, bool rightOn)
         gLeftSpeed = 0;
         gRightSpeed = 0;
         gTurn = +1;
-        gTurnStart = millis();
-        gTurnPause = true;
         Serial.println("[PATH] -> RIGHT");
     }
     else
@@ -115,6 +127,15 @@ void updateTurn()
         {
             gTurnPause = false;
             gTurnStart = now;
+
+            if (gTurn == 0)
+            {
+                const bool leftOn = pendingJunctionLeftOn;
+                const bool rightOn = pendingJunctionRightOn;
+                pendingJunctionLeftOn = false;
+                pendingJunctionRightOn = false;
+                handleJunction(leftOn, rightOn);
+            }
         }
 
         return;

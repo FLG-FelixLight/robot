@@ -109,7 +109,7 @@ void loop()
     else if (!gObstacleDetected && obstaclePaused)
     {
         const uint32_t pauseDuration = millis() - obstaclePauseStartedAt;
-        if (gTurn != 0)
+        if (gTurn != 0 || gTurnPause)
         {
             gTurnStart += pauseDuration;
         }
@@ -181,7 +181,7 @@ void loop()
 
     // Detect PATH junctions before entering line-following PID.
     // A turn already in progress must finish before another route symbol is consumed.
-    if (robotMode == MODE_PATH && gTurn == 0)
+    if (robotMode == MODE_PATH && gTurn == 0 && !gTurnPause)
     {
         const bool pattern = s1on && !s3on && s5on;
 
@@ -203,14 +203,12 @@ void loop()
             gCenteredSince = 0;
         }
 
-        // Đã armed + thấy pattern ngã rẽ -> thực hiện lệnh rẽ ngay:
-        // handleJunction() dừng động cơ (rồi updateTurn() dừng đủ TURN_PAUSE_MS = 2s,
-        // sau đó xoay TURN_DURATION_MS theo hướng L/R trong mã đường đi).
+        // Đã armed + thấy pattern ngã rẽ -> dừng 2 giây trước khi đọc lệnh đường đi.
         if (pattern && gJunctionArmed)
         {
             gJunctionArmed = false;
 
-            handleJunction(s1on, s5on);
+            beginJunctionPause(s1on, s5on);
 
             telemetryThrottled();
             delay(LINE_LOOP_DELAY_MS);
@@ -259,7 +257,7 @@ void loop()
     }
 
     // PATH: dang re
-    if (robotMode == MODE_PATH && gTurn != 0)
+    if (robotMode == MODE_PATH && (gTurn != 0 || gTurnPause))
     {
         updateTurn();
 
