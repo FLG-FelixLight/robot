@@ -68,12 +68,12 @@ function connect() {
 
     ws.onopen = () => {
         setOnline(true);
-        log("Da ket noi websocket");
+        log("WebSocket connected");
     };
 
     ws.onclose = () => {
         setOnline(false);
-        log("Mat ket noi - dang thu lai...");
+        log("Disconnected - retrying...");
         scheduleReconnect();
     };
 
@@ -112,7 +112,7 @@ function send(obj) {
 
 function setOnline(online) {
     els.wsDot.className = "dot " + (online ? "online" : "offline");
-    els.wsText.textContent = online ? "Da ket noi" : "Mat ket noi";
+    els.wsText.textContent = online ? "Connected" : "Disconnected";
 }
 
 function log(t) {
@@ -156,7 +156,7 @@ function updateTelemetry(t) {
 
     if (t.mode === "path") {
         els.noticeText.textContent =
-            "DEST " + t.dest + " · buoc " + t.step + " · " + (t.notice || "");
+            "DEST " + t.dest + " · step " + t.step + " · " + (t.notice || "");
     } else {
         els.noticeText.textContent = t.notice || "--";
     }
@@ -167,14 +167,14 @@ function updateTelemetry(t) {
 function setState(on, mode) {
     mode = mode || (on ? "auto" : "stop");
 
-    const label = mode === "auto" ? "DO LINE (AUTO)"
-        : mode === "manual" ? "LAI TAY (MANUAL)"
-        : mode === "path" ? "DI THEO MA (PATH)" : "DUNG";
+    const label = mode === "auto" ? "LINE FOLLOWING (AUTO)"
+        : mode === "manual" ? "MANUAL DRIVE"
+        : mode === "path" ? "FOLLOW ROUTE (PATH)" : "STOPPED";
 
     const color = mode === "auto" || mode === "path" ? "var(--green)"
         : mode === "manual" ? "var(--amber)" : "var(--muted)";
 
-    els.stateText.textContent = "Trang thai: " + label;
+    els.stateText.textContent = "Status: " + label;
     els.stateText.style.color = color;
     els.modeText.textContent = mode.toUpperCase();
     els.modeText.style.color = color;
@@ -240,24 +240,24 @@ function drawChart() {
 
 $("btnStart").onclick = () => {
     send({ cmd: "start" });
-    log("Gui lenh START");
+    log("START command sent");
 };
 
 $("btnStop").onclick = () => {
     send({ cmd: "stop" });
-    log("Gui lenh STOP");
+    log("STOP command sent");
 };
 
 $("btnEstop").onclick = () => {
     send({ cmd: "estop" });
-    log("Gui lenh E-STOP");
+    log("E-STOP command sent");
 };
 
 $("btnPlay").onclick = () => {
     if (send({ cmd: "play", file: "welcome.mp3" })) {
-        log("Gui lenh phat welcome.mp3");
+        log("Play command sent: welcome.mp3");
     } else {
-        log("Chua ket noi websocket");
+        log("WebSocket is not connected");
     }
 };
 
@@ -277,7 +277,7 @@ function onSlider() {
             kd: parseFloat(els.kd.value),
             base: parseInt(els.base.value, 10)
         });
-        log("Da cap nhat PID / speed");
+        log("PID / speed settings updated");
     }, 150);
 }
 
@@ -320,7 +320,7 @@ function updateDrive() {
     if (dir !== lastDriveDir) {
         lastDriveDir = dir;
         send({ cmd: "drive", dir: dir });
-        log(dir === "stop" ? "Dung lai tay" : "Lai tay: " + dir);
+        log(dir === "stop" ? "Manual drive stopped" : "Manual drive: " + dir.replace("_", " "));
     }
 
     if (dir !== "stop" && !driveHeartbeat) {
@@ -386,7 +386,7 @@ function destLog(t) {
 
 function updateDestFormMode() {
     const submitButton = els.destForm.querySelector('button[type="submit"]');
-    submitButton.textContent = editingDestId === null ? "Them" : "Cap nhat";
+    submitButton.textContent = editingDestId === null ? "Add" : "Update";
 }
 
 function resetDestForm() {
@@ -410,7 +410,7 @@ function renderTables() {
         const td = document.createElement("td");
         td.colSpan = 4;
         td.className = "empty";
-        td.textContent = "Chua co du lieu";
+        td.textContent = "No destinations configured";
         tr.appendChild(td);
         body.appendChild(tr);
         return;
@@ -431,12 +431,12 @@ function renderTables() {
         const tdGo = document.createElement("td");
         const btnGo = document.createElement("button");
         btnGo.className = "btn tiny start";
-        btnGo.textContent = "Di";
+        btnGo.textContent = "Go";
         btnGo.onclick = () => {
             if (send({ cmd: "goto", id: id })) {
-                destLog("Da gui lenh di toi diem " + id);
+                destLog("Navigation command sent for destination " + id);
             } else {
-                destLog("Chua ket noi websocket");
+                destLog("WebSocket is not connected");
             }
         };
         tdGo.appendChild(btnGo);
@@ -446,7 +446,7 @@ function renderTables() {
 
         const btnEdit = document.createElement("button");
         btnEdit.className = "btn tiny ghost";
-        btnEdit.textContent = "Sua";
+        btnEdit.textContent = "Edit";
         btnEdit.onclick = () => {
             editingDestId = String(id);
             els.destId.value = id;
@@ -457,14 +457,14 @@ function renderTables() {
 
         const btnDel = document.createElement("button");
         btnDel.className = "btn tiny estop";
-        btnDel.textContent = "Xoa";
+        btnDel.textContent = "Delete";
         btnDel.onclick = () => {
             delete tables[id];
             if (editingDestId === String(id)) {
                 resetDestForm();
             }
             renderTables();
-            destLog("Da xoa diem " + id + " (chua luu len robot)");
+            destLog("Deleted destination " + id + " (not yet saved to robot)");
         };
 
         tdAct.appendChild(btnEdit);
@@ -484,14 +484,14 @@ async function loadTables() {
         if (!res.ok) throw new Error("HTTP " + res.status);
         const loadedTables = await res.json();
         if (!loadedTables || Array.isArray(loadedTables) || typeof loadedTables !== "object") {
-            throw new Error("Du lieu bang diem den khong hop le");
+            throw new Error("Invalid destination table data");
         }
         tables = loadedTables;
         resetDestForm();
         renderTables();
-        destLog("Da tai " + Object.keys(tables).length + " diem den");
+        destLog("Loaded " + Object.keys(tables).length + " destination(s)");
     } catch (e) {
-        destLog("Tai bang that bai: " + e.message);
+        destLog("Failed to load table: " + e.message);
     }
 }
 
@@ -510,10 +510,10 @@ async function saveTables() {
         }
 
         destLog(Object.keys(tables).length === 0
-            ? "Da xoa toan bo diem den tren robot"
-            : "Da luu len robot");
+            ? "All destinations deleted from robot"
+            : "Saved to robot");
     } catch (e) {
-        destLog("Luu that bai: " + e.message);
+        destLog("Failed to save: " + e.message);
     }
 }
 
@@ -525,19 +525,19 @@ els.destForm.addEventListener("submit", (e) => {
     const code = els.destCode.value.trim().toUpperCase();
 
     if (!Number.isSafeInteger(id) || id < 1 || id > 2147483647) {
-        destLog("ID phai la so nguyen tu 1 den 2147483647");
+        destLog("ID must be an integer from 1 to 2147483647");
         return;
     }
 
     if (!validCode(code)) {
-        destLog("Ma sai: chi dung L R S va phai ket thuc bang 0");
+        destLog("Invalid route code: use only L, R, S and end with 0");
         return;
     }
 
     if (editingDestId !== null &&
         idKey !== editingDestId &&
         Object.prototype.hasOwnProperty.call(tables, idKey)) {
-        destLog("ID " + id + " da ton tai; hay chon ID khac");
+        destLog("ID " + id + " already exists; choose a different ID");
         return;
     }
 
@@ -548,8 +548,8 @@ els.destForm.addEventListener("submit", (e) => {
     tables[idKey] = code;
     resetDestForm();
     renderTables();
-    destLog((wasEditing ? "Da sua diem " : "Da them/cap nhat diem ") +
-        id + " = " + code + " (chua luu len robot)");
+    destLog((wasEditing ? "Updated destination " : "Added destination ") +
+        id + " = " + code + " (not yet saved to robot)");
 });
 
 $("btnReload").onclick = loadTables;

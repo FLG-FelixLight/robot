@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="vi">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -12,13 +12,13 @@
             <span class="logo">🤖</span>
             <div>
                 <h1>ESP32-S3 LINE FOLLOWER</h1>
-                <p>Line sensor 5 mắt &middot; L298N &middot; PID &middot; Path &middot; Audio</p>
+                <p>5 line sensors &middot; L298N &middot; PID &middot; Path &middot; Audio</p>
             </div>
         </div>
 
         <div class="status">
             <span id="wsDot" class="dot offline"></span>
-            <span id="wsText">Mat ket noi</span>
+            <span id="wsText">Disconnected</span>
             <span class="sep">|</span>
             <span id="ipText">IP: --</span>
             <span class="sep">|</span>
@@ -27,8 +27,8 @@
     </header>
 
     <nav class="tabs">
-        <button class="tab active" data-tab="tab-control">Dieu khien</button>
-        <button class="tab" data-tab="tab-dest">Diem den</button>
+        <button class="tab active" data-tab="tab-control">Control</button>
+        <button class="tab" data-tab="tab-dest">Destinations</button>
     </nav>
 
     <main>
@@ -37,7 +37,7 @@
 
             <!-- SENSOR -->
             <section class="card">
-                <h2>Cam bien line</h2>
+                <h2>Line Sensors</h2>
                 <div class="sensors">
                     <div class="sensor" id="s0"><span class="name">S1</span><span class="lamp"></span></div>
                     <div class="sensor" id="s1"><span class="name">S2</span><span class="lamp"></span></div>
@@ -45,7 +45,7 @@
                     <div class="sensor" id="s3"><span class="name">S4</span><span class="lamp"></span></div>
                     <div class="sensor" id="s4"><span class="name">S5</span><span class="lamp"></span></div>
                 </div>
-                <p id="fullWarn" class="warn hidden">⚠ 5 cam bien deu thay line (nga tu / vung den rong)</p>
+                <p id="fullWarn" class="warn hidden">⚠ All 5 sensors detect the line (intersection / wide marking)</p>
             </section>
 
             <!-- TELEMETRY -->
@@ -70,29 +70,29 @@
 
             <!-- CONTROL -->
             <section class="card">
-                <h2>Dieu khien</h2>
+                <h2>Control</h2>
                 <div class="controls">
                     <button id="btnStart" class="btn start">▶ START</button>
                     <button id="btnStop" class="btn stop">■ STOP</button>
                     <button id="btnEstop" class="btn estop">E-STOP</button>
                 </div>
-                <p id="stateText" class="state">Trang thai: DUNG</p>
+                <p id="stateText" class="state">Status: STOPPED</p>
                 <p id="noticeText" class="state notice">--</p>
             </section>
 
             <!-- AUDIO -->
             <section class="card">
-                <h2>Am thanh</h2>
+                <h2>Audio</h2>
                 <div class="controls">
-                    <button id="btnPlay" class="btn start">🔊 Phat welcome.mp3</button>
+                    <button id="btnPlay" class="btn start">🔊 Play welcome.mp3</button>
                 </div>
-                <p class="hint">File phai nam trong <b>/data/audio/welcome.mp3</b> va da nap LittleFS.</p>
+                <p class="hint">The file must be at <b>/data/audio/welcome.mp3</b> and uploaded to LittleFS.</p>
             </section>
 
             <!-- MANUAL DRIVE -->
             <section class="card">
-                <h2>Lai tay</h2>
-                <p class="mode">Che do: <b id="modeText">STOP</b></p>
+                <h2>Manual Drive</h2>
+                <p class="mode">Mode: <b id="modeText">STOP</b></p>
                 <div class="dpad">
                     <span></span>
                     <button class="pad" data-dir="forward">▲</button>
@@ -104,12 +104,12 @@
                     <button class="pad" data-dir="back">▼</button>
                     <span></span>
                 </div>
-                <p class="hint">Giu nut de chay, tha ra de dung. Giu 2 nut (len + trai...) de cua. Hoac dung phim mui ten.</p>
+                <p class="hint">Hold a button to move and release it to stop. Hold two buttons (e.g. up + left) to turn, or use the arrow keys.</p>
             </section>
 
             <!-- PID TUNING -->
             <section class="card">
-                <h2>Tuning PID</h2>
+                <h2>PID Tuning</h2>
 
                 <div class="slider">
                     <label>Kp <b id="vKp">75.0</b></label>
@@ -134,7 +134,7 @@
 
             <!-- CHART -->
             <section class="card">
-                <h2>Error theo thoi gian</h2>
+                <h2>Error Over Time</h2>
                 <canvas id="chart" width="800" height="220"></canvas>
             </section>
         </div>
@@ -142,31 +142,31 @@
         <!-- ================= TAB DESTINATION ================= -->
         <div id="tab-dest" class="tabpane">
             <section class="card">
-                <h2>Bang diem den</h2>
+                <h2>Destination Table</h2>
 
                 <form id="destForm" class="destform">
-                    <input id="destId" type="number" min="1" max="2147483647" step="1" placeholder="ID (a[1], a[2]...)" required>
-                    <input id="destCode" type="text" placeholder="Ma, VD: LRLS0" required>
-                    <button class="btn small start" type="submit">Luu</button>
+                    <input id="destId" type="number" min="1" max="2147483647" step="1" placeholder="ID (e.g. 1, 2...)" required>
+                    <input id="destCode" type="text" placeholder="Route code, e.g. LRLS0" required>
+                    <button class="btn small start" type="submit">Add</button>
                 </form>
 
                 <p class="hint">
-                    L = re trai &middot; R = re phai &middot; S = di thang &middot; 0 = diem den (bat buoc o cuoi).
-                    Robot tieu thu 1 ky tu moi khi gap nga re, gap <b>0</b> thi di toi nga/vach ke tiep roi dung.
+                    L = turn left &middot; R = turn right &middot; S = go straight &middot; 0 = destination (must be the last character).
+                    The robot consumes one character at each junction. When it reaches <b>0</b>, it proceeds to the next junction/line marking and stops.
                 </p>
 
                 <table class="desttable">
                     <thead>
-                        <tr><th>ID</th><th>Ma</th><th>Diem den</th><th></th></tr>
+                        <tr><th>ID</th><th>Route Code</th><th>Destination</th><th>Actions</th></tr>
                     </thead>
                     <tbody id="destBody">
-                        <tr><td colspan="4" class="empty">Chua co du lieu</td></tr>
+                        <tr><td colspan="4" class="empty">No destinations configured</td></tr>
                     </tbody>
                 </table>
 
                 <div class="controls">
-                    <button id="btnReload" class="btn small ghost" type="button">Tai lai</button>
-                    <button id="btnSave" class="btn small start" type="button">Luu len robot</button>
+                    <button id="btnReload" class="btn small ghost" type="button">Reload</button>
+                    <button id="btnSave" class="btn small start" type="button">Save to Robot</button>
                 </div>
 
                 <p id="destLog" class="state">--</p>
@@ -175,7 +175,7 @@
     </main>
 
     <footer>
-        <span id="logText">Cho ket noi websocket...</span>
+        <span id="logText">Waiting for WebSocket connection...</span>
     </footer>
 
     <script src="/app.js"></script>
